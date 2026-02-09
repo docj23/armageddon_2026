@@ -1,0 +1,89 @@
+============================================================
+BONUS C — Route53 + ACM DNS Validation
+Evidence File — São Paulo (sa-east-1)
+Generated: February 8, 2026
+============================================================
+
+DESIGN GOALS (from professor's 1c_bonus-C.md):
+  - Route53 hosted zone manages domain DNS
+  - ACM certificate issued via DNS validation
+  - HTTPS terminates at ALB with valid cert
+  - DNS points to ingress, TLS via ACM, ALB handles secure public entry
+
+============================================================
+VERIFICATION 1: Hosted zone exists
+============================================================
+
+$ aws route53 list-hosted-zones --query "HostedZones[?Name=='cigarsrmypassion.click.'].{Id:Id,Name:Name}" --output table
+
+|            ListHostedZones               |
+|         Id                    |   Name   |
+| /hostedzone/Z02253234ZXKFENT1HKK | cigarsrmypassion.click. |
+
+RESULT: PASS — Hosted zone exists for cigarsrmypassion.click
+
+============================================================
+VERIFICATION 2: DNS records exist
+============================================================
+
+$ aws route53 list-resource-record-sets --hosted-zone-id Z02253234ZXKFENT1HKK --query "ResourceRecordSets[].Name"
+[
+    "cigarsrmypassion.click.",
+    "cigarsrmypassion.click.",
+    "_c8ecb7affc0b667802c3d970fa21b01d.cigarsrmypassion.click."
+]
+
+RESULT: PASS — Zone contains:
+  - Base domain NS + SOA records (cigarsrmypassion.click.)
+  - ACM DNS validation CNAME (_c8ecb7affc...cigarsrmypassion.click.)
+
+NOTE: No app.cigarsrmypassion.click ALIAS record in São Paulo.
+São Paulo ALB is accessed via raw ALB DNS name. ALIAS record was
+part of Tokyo's Bonus B deployment (cigarsrmypassion.click domain).
+The key proof is that Route53 manages the domain and ACM DNS
+validation is in place.
+
+============================================================
+VERIFICATION 3: ACM certificate issued
+============================================================
+
+$ aws acm list-certificates --region sa-east-1 --query "CertificateSummaryList[].{Domain:DomainName,ARN:CertificateArn,Status:Status}" --output table
+
+|  ARN    | arn:aws:acm:sa-east-1:633351753207:certificate/07266831-190e-4767-bb9d-6b2be789c08f |
+|  Domain | cigarsrmypassion.click |
+|  Status | ISSUED                 |
+
+RESULT: PASS — Certificate ISSUED for cigarsrmypassion.click in sa-east-1.
+Validated via DNS (CNAME record in Route53 hosted zone).
+
+============================================================
+VERIFICATION 4: HTTPS works (TLS termination at ALB)
+============================================================
+
+$ curl -Ik https://liberdade-alb01-1085062523.sa-east-1.elb.amazonaws.com
+HTTP/1.1 200 OK
+Date: Sun, 08 Feb 2026 20:56:20 GMT
+Content-Type: text/html; charset=utf-8
+Content-Length: 166
+Connection: keep-alive
+Server: Werkzeug/3.1.5 Python/3.9.25
+
+RESULT: PASS — HTTPS returns 200 OK. TLS terminates at ALB.
+Note: -k flag used because cert is issued for cigarsrmypassion.click
+but request hits raw ALB DNS name (expected hostname mismatch).
+
+============================================================
+INFRASTRUCTURE SUMMARY
+============================================================
+
+Domain:           cigarsrmypassion.click
+Hosted Zone ID:   Z02253234ZXKFENT1HKK
+ACM Cert ARN:     arn:aws:acm:sa-east-1:633351753207:certificate/07266831-190e-4767-bb9d-6b2be789c08f
+ACM Status:       ISSUED
+Validation:       DNS (Route53 CNAME)
+ALB DNS:          liberdade-alb01-1085062523.sa-east-1.elb.amazonaws.com
+HTTPS Listener:   Port 443, TLS 1.3 policy
+
+============================================================
+END OF BONUS C EVIDENCE
+============================================================

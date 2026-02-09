@@ -1,0 +1,6 @@
+Short Answers:
+
+A.  To give access to a specific application or service only.  Basically for heightened security purposes.
+B.  3306
+C.  Secrets Manager is like a vault for sensitive information that drastically reduces accidental exposure to the outside
+

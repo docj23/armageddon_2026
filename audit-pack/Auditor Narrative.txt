@@ -1,0 +1,19 @@
+This architecture was designed to comply with Japan's APPI (個人情報保護法) by ensuring
+all patient medical data (PHI) remains physically stored within Japan at all times.
+The sole database — an RDS MySQL instance — exists only in Tokyo (ap-northeast-1).
+No database, read replica, or persistent data store of any kind exists in São Paulo.
+
+São Paulo (sa-east-1) operates as a stateless compute extension, allowing doctors in
+South America to access the medical system through an ALB with TLS termination and WAF
+inspection. EC2 instances run in private subnets with no public IP addresses, accepting
+traffic only through the ALB. Every read and write operation traverses an AWS Transit
+Gateway peering corridor from São Paulo to Tokyo, where data is processed and stored.
+
+The Transit Gateway architecture was chosen over VPC peering because it creates a visible,
+auditable data corridor with centralized routing control — a requirement in regulated
+environments. The TGW peering attachment, VPC attachments, and route tables in both regions
+are documented in the network corridor evidence. All infrastructure changes are tracked
+via CloudTrail in both regions, and WAF logs confirm active inspection of all inbound traffic.
+
+At no point in this architecture is PHI stored, cached, or replicated outside of Japan.
+Global access does not require global storage.

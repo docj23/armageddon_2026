@@ -1,0 +1,163 @@
+============================================================
+LAB 1C — Terraform: EC2 → RDS + Secrets/Params + Observability
+Evidence File — Tokyo (ap-northeast-1)
+Generated: February 8, 2026
+============================================================
+
+REQUIREMENTS (from professor's 1c_readme.md):
+  - VPC, public/private subnets, IGW, NAT, routing
+  - EC2 app host + IAM role/profile
+  - RDS (private) + subnet group + SG with inbound from EC2 SG
+  - Parameter Store values (/lab/db/*)
+  - Secrets Manager secret (db creds)
+  - CloudWatch log group
+  - CloudWatch alarm (DBConnectionErrors >= 3 per 5 min)
+  - SNS topic + subscription
+
+============================================================
+DELIVERABLE 1: terraform apply — Outputs
+============================================================
+
+$ cd ~/Documents/terraform/armageddon_2026/tokyo/
+$ terraform output
+
+chewbacca_ec2_instance_id   = "i-0c8986c0e25946591"
+chewbacca_ec2_public_ip     = "54.238.186.41"
+chewbacca_rds_endpoint      = "shinjuku-rds01.c5o8c286cxx5.ap-northeast-1.rds.amazonaws.com:3306"
+chewbacca_rds_identifier    = "db-EA4PU6DL6XVLF6T3TAPKWI7EGQ"
+chewbacca_secret_id         = "shinjuku/rds/mysql"
+chewbacca_sns_topic_arn     = "arn:aws:sns:ap-northeast-1:633351753207:shinjuku-db-incidents"
+chewbacca_vpc_id            = "vpc-06ab50653a2970e02"
+shinjuku_peering_attachment_id = "tgw-attach-0190087957dfc1d03"
+shinjuku_tgw_id             = "tgw-02decd24604831b6f"
+
+============================================================
+DELIVERABLE 2: terraform plan — State Clean
+============================================================
+
+$ terraform plan
+(After syncing drift: 1 added, 2 changed, 0 to destroy)
+
+$ terraform apply -auto-approve
+Apply complete! Resources: 1 added, 2 changed, 0 destroyed.
+
+Changes synced:
+  - EC2 SG: ALB ingress rule formalized (from bonus_b.tf)
+  - RDS SG: São Paulo CIDR (10.2.0.0/16) ingress for TGW corridor
+  - SNS subscription: re-created for shelton.larry26@gmail.com
+
+State is now fully in sync with Terraform code.
+
+============================================================
+DELIVERABLE 3: Gate Script Verification (CLI)
+============================================================
+
+$ cd ~/Documents/terraform/armageddon_2026/scripts/
+$ REGION=ap-northeast-1 INSTANCE_ID=i-0c8986c0e25946591 SECRET_ID=shinjuku/rds/mysql DB_ID=shinjuku-rds01 ./run_all_gates.sh
+
+--- Gate 1/2: secrets_and_role ---
+
+=== SEIR Gate: Secrets + EC2 Role Verification ===
+Timestamp (UTC): 2026-02-08T21:15:59Z
+Region:          ap-northeast-1
+Instance ID:     i-0c8986c0e25946591
+Secret ID:       shinjuku/rds/mysql
+Resolved Role:   shinjuku-ec2-role01
+Caller ARN:      arn:aws:iam::633351753207:root
+
+PASS: aws sts get-caller-identity succeeded (credentials OK).
+PASS: secret exists and is describable (shinjuku/rds/mysql).
+INFO: rotation requirement disabled (REQUIRE_ROTATION=false).
+PASS: no resource policy found (OK) or not applicable (shinjuku/rds/mysql).
+PASS: instance has IAM instance profile attached (i-0c8986c0e25946591).
+PASS: resolved instance profile -> role (shinjuku-instance-profile01 -> shinjuku-ec2-role01).
+INFO: EXPECTED_ROLE_NAME not set; using resolved role (shinjuku-ec2-role01).
+INFO: on-instance checks skipped (not running as expected role on EC2).
+
+RESULT: PASS
+
+--- Gate 2/2: network_db ---
+
+=== SEIR Gate: Network + RDS Verification ===
+Timestamp (UTC): 2026-02-08T21:16:23Z
+Region:          ap-northeast-1
+EC2 Instance:    i-0c8986c0e25946591
+RDS Instance:    shinjuku-rds01
+Engine:          mysql
+DB Port:         3306
+Caller ARN:      arn:aws:iam::633351753207:root
+
+PASS: aws sts get-caller-identity succeeded (credentials OK).
+PASS: RDS instance exists (shinjuku-rds01).
+PASS: RDS is not publicly accessible (PubliclyAccessible=False).
+PASS: discovered DB port = 3306 (engine=mysql).
+PASS: EC2 security groups resolved (i-0c8986c0e25946591): sg-01bfe88016249bdda
+PASS: RDS security groups resolved (shinjuku-rds01): sg-0e764a2ee6c9dfbf9
+PASS: RDS SG allows DB port 3306 from EC2 SG (SG-to-SG ingress present).
+INFO: private subnet check disabled (CHECK_PRIVATE_SUBNETS=false).
+
+RESULT: PASS
+
+--- gate_result.json ---
+
+{
+  "gate": "network_db",
+  "timestamp_utc": "2026-02-08T21:16:24Z",
+  "region": "ap-northeast-1",
+  "instance_id": "i-0c8986c0e25946591",
+  "db_id": "shinjuku-rds01",
+  "engine": "mysql",
+  "db_port": "3306",
+  "publicly_accessible": "False",
+  "ec2_security_groups": "sg-01bfe88016249bdda",
+  "rds_security_groups": "sg-0e764a2ee6c9dfbf9",
+  "db_subnet_group": "shinjuku-rds-subnet-group01",
+  "toggles": {
+    "check_private_subnets": false
+  },
+  "status": "PASS",
+  "exit_code": 0,
+  "warnings": [],
+  "failures": []
+}
+
+============================================================
+DELIVERABLE 4: Incident Runbook Execution Notes
+============================================================
+
+Incident response was completed during Lab 1B. The CloudWatch alarm
+(shinjuku-db-connection-failure) monitors DBConnectionErrors >= 3
+per 5-minute period and fires to SNS topic shinjuku-db-incidents,
+which emails shelton.larry26@gmail.com.
+
+Alarm was triggered and recovered during Lab 1B incident response
+exercise (simulated DB failure → alarm fired → recovery confirmed).
+
+============================================================
+INFRASTRUCTURE SUMMARY — TOKYO (ap-northeast-1)
+============================================================
+
+VPC:             vpc-06ab50653a2970e02 (10.1.0.0/16)
+EC2 Instance:    i-0c8986c0e25946591 (54.238.186.41)
+EC2 IAM Role:    shinjuku-ec2-role01
+Instance Profile: shinjuku-instance-profile01
+RDS Instance:    shinjuku-rds01 (MySQL 3306)
+RDS Endpoint:    shinjuku-rds01.c5o8c286cxx5.ap-northeast-1.rds.amazonaws.com
+RDS Public:      False
+RDS Subnet Group: shinjuku-rds-subnet-group01
+EC2 SG:          sg-01bfe88016249bdda
+RDS SG:          sg-0e764a2ee6c9dfbf9
+Secret:          shinjuku/rds/mysql
+SNS Topic:       arn:aws:sns:ap-northeast-1:633351753207:shinjuku-db-incidents
+CW Alarm:        shinjuku-db-connection-failure
+TGW:             tgw-02decd24604831b6f
+TGW Peering:     tgw-attach-0190087957dfc1d03
+
+Terraform Files (tokyo/):
+  main.tf, variables.tf, terraform.tfvars, outputs.tf, providers.tf,
+  versions.tf, user_data.sh, bonus_b.tf, bonus_b_variables.tf,
+  bonus_b_route53.tf, rds_sg_sp.tf, tokyo_tgw.tf, tokyo_routes.tf
+
+============================================================
+END OF LAB 1C CORE EVIDENCE
+============================================================

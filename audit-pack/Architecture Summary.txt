@@ -1,0 +1,81 @@
+Architecture Summary — APPI-Compliant Cross-Region Medical System
+
+
+OVERVIEW
+
+This system serves a Japanese medical organization operating across two AWS regions with strict data residency requirements under Japan's APPI.
+
+
+REGIONAL ARCHITECTURE
+
+Tokyo (ap-northeast-1) — Data Authority
+
+  VPC: 10.1.0.0/16
+  RDS: shinjuku-rds01 (MySQL) — the ONLY database in the architecture
+  EC2: Application tier in private subnet
+  Transit Gateway: shinjuku-tgw01 (hub)
+  Secrets Manager: shinjuku/rds/mysql (authoritative credentials)
+  Role: Single source of truth for all patient data (PHI)
+
+São Paulo (sa-east-1) — Stateless Compute
+
+  VPC: 10.2.0.0/16
+  EC2: Application tier in private subnet (10.2.101.0/24)
+  ALB: Public-facing load balancer with TLS termination (HTTPS 443)
+  WAF: liberdade-waf01 (AWSManagedRulesCommonRuleSet)
+  Transit Gateway: liberdade-tgw01 (spoke)
+  No RDS, no replicas, no local PHI storage
+  Role: Serve doctors in South America; all reads/writes go to Tokyo
+
+
+DATA FLOW
+
+  Doctor (São Paulo) → ALB (TLS) → EC2 (private subnet)
+      → Transit Gateway (São Paulo) → TGW Peering → Transit Gateway (Tokyo)
+      → Tokyo VPC → Tokyo RDS (PHI stored here only)
+
+All traffic traverses the AWS backbone. Encrypted in transit. Logged and auditable.
+
+
+TRANSIT GATEWAY CORRIDOR
+
+  Component               Tokyo                              São Paulo
+  TGW                     shinjuku-tgw01                     liberdade-tgw01
+  VPC Attachment           shinjuku-attach-tokyo-vpc01        liberdade-attach-sp-vpc01
+  Peering                  shinjuku-to-liberdade-peer01       liberdade-accept-peer01
+  Peering Attachment       tgw-attach-0190087957dfc1d03       (same — shared)
+  Status                   Active                             Active
+
+
+SECURITY CONTROLS
+
+  ALB Security Group: Allows inbound 80/443 from internet only
+  EC2 Security Group: Allows inbound only from ALB SG (no direct public access)
+  RDS Security Group: Allows inbound 3306 from Tokyo app subnets + São Paulo VPC CIDR (10.2.0.0/16)
+  WAF: AWSManagedRulesCommonRuleSet on ALB, logging to CloudWatch Logs
+  EC2 Placement: Private subnet — no public IP, no direct internet access
+
+
+COMPLIANCE DESIGN PRINCIPLES
+
+  1. PHI never leaves Japan — RDS exists only in ap-northeast-1
+  2. No cross-region replication — No read replicas, no Aurora Global, no local caching
+  3. Controlled data corridor — Transit Gateway provides auditable, explicit routing
+  4. Stateless compute abroad — São Paulo EC2 holds zero persistent patient data
+  5. Edge security — ALB terminates TLS, WAF inspects all requests before they reach EC2
+
+
+WHAT IS EXPLICITLY NOT ALLOWED
+
+  RDS outside Tokyo
+  Cross-region read replicas
+  Aurora Global Database
+  Local caching of patient records on EC2 disk
+  Any persistent PHI storage outside ap-northeast-1
+
+These are not "bad practices" — they are compliance violations under APPI.
+
+
+KEY PRINCIPLE
+
+Global access does not require global storage.

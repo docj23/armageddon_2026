@@ -1,0 +1,33 @@
+=== Edge Security Proof (ALB + TLS + WAF) ===
+
+--- HTTPS Response (root) ---
+  % Total    % Received % Xferd  Average Speed  Time    Time    Time   Current
+                                 Dload  Upload  Total   Spent   Left   Speed
+  0      0   0      0   0      0      0      0                              0  0    166   0      0   0      0      0      0                              0  0    166   0      0   0      0      0      0                              0  0    166   0      0   0      0      0      0                              0
+HTTP/1.1 200 OK
+Date: Sun, 08 Feb 2026 19:05:05 GMT
+Content-Type: text/html; charset=utf-8
+Content-Length: 166
+Connection: keep-alive
+Server: Werkzeug/3.1.5 Python/3.9.25
+
+
+--- HTTPS Response (/list) ---
+  % Total    % Received % Xferd  Average Speed  Time    Time    Time   Current
+                                 Dload  Upload  Total   Spent   Left   Speed
+  0      0   0      0   0      0      0      0                              0  0      0   0      0   0      0      0      0           00:01              0  0      0   0      0   0      0      0      0           00:02              0  0    121   0      0   0      0      0      0           00:02              0  0    121   0      0   0      0      0      0           00:02              0  0    121   0      0   0      0      0      0           00:02              0
+HTTP/1.1 200 OK
+Date: Sun, 08 Feb 2026 19:05:09 GMT
+Content-Type: text/html; charset=utf-8
+Content-Length: 121
+Connection: keep-alive
+Server: Werkzeug/3.1.5 Python/3.9.25
+
+
+--- WAF ACL attached to ALB ---
+[
+    {
+        "Name": "liberdade-waf01",
+        "ARN": "arn:aws:wafv2:sa-east-1:633351753207:regional/webacl/liberdade-waf01/ff241915-9241-4a5f-b4b3-48b61bfaff51"
+    }
+]

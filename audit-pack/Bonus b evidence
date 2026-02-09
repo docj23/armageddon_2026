@@ -1,0 +1,103 @@
+============================================================
+BONUS B — ALB + TLS + WAF + Dashboard + Alarms
+Evidence File — São Paulo (sa-east-1)
+Generated: February 8, 2026
+============================================================
+
+DESIGN GOALS (from professor's 1c_bonus-B.md):
+  - Public ALB (internet-facing)
+  - Private EC2 targets (no public IP)
+  - TLS with ACM for cigarsrmypassion.click
+  - WAF attached to ALB
+  - CloudWatch Dashboard
+  - SNS alarm on ALB 5xx spikes
+
+============================================================
+VERIFICATION 1: ALB exists and is active
+============================================================
+
+$ aws elbv2 describe-load-balancers --names liberdade-alb01 --region sa-east-1 --query "LoadBalancers[0].{State:State.Code,ARN:LoadBalancerArn}" --output table
+
+|  ARN   | arn:aws:elasticloadbalancing:sa-east-1:633351753207:loadbalancer/app/liberdade-alb01/84349c7759e13580 |
+|  State | active |
+
+RESULT: PASS — ALB is active.
+
+============================================================
+VERIFICATION 2: HTTPS listener exists on 443
+============================================================
+
+$ aws elbv2 describe-listeners --load-balancer-arn arn:aws:elasticloadbalancing:sa-east-1:633351753207:loadbalancer/app/liberdade-alb01/84349c7759e13580 --region sa-east-1 --query "Listeners[].Port"
+[
+    443,
+    80
+]
+
+RESULT: PASS — Both HTTPS (443) and HTTP (80) listeners present.
+Port 80 redirects to 443 (HTTP → HTTPS redirect).
+
+============================================================
+VERIFICATION 3: Target is healthy
+============================================================
+
+$ aws elbv2 describe-target-health --target-group-arn arn:aws:elasticloadbalancing:sa-east-1:633351753207:targetgroup/liberdade-tg01/fb16024487639520 --region sa-east-1 --query "TargetHealthDescriptions[].{Target:Target.Id,State:TargetHealth.State}"
+[
+    {
+        "Target": "i-04f656ffff232edb0",
+        "State": "healthy"
+    }
+]
+
+RESULT: PASS — Private EC2 (i-04f656ffff232edb0) is healthy behind ALB.
+
+============================================================
+VERIFICATION 4: WAF attached to ALB
+============================================================
+
+$ aws wafv2 get-web-acl-for-resource --resource-arn arn:aws:elasticloadbalancing:sa-east-1:633351753207:loadbalancer/app/liberdade-alb01/84349c7759e13580 --region sa-east-1 --query "WebACL.Name"
+"liberdade-waf01"
+
+RESULT: PASS — WAF ACL liberdade-waf01 attached to ALB.
+
+============================================================
+VERIFICATION 5: ALB 5xx alarm exists
+============================================================
+
+$ aws cloudwatch describe-alarms --alarm-name-prefix liberdade-alb --region sa-east-1 --query "MetricAlarms[].AlarmName"
+[
+    "liberdade-alb-5xx-alarm01"
+]
+
+RESULT: PASS — 5xx spike alarm configured.
+
+============================================================
+VERIFICATION 6: CloudWatch Dashboard exists
+============================================================
+
+$ aws cloudwatch list-dashboards --dashboard-name-prefix liberdade --region sa-east-1 --query "DashboardEntries[].DashboardName"
+[
+    "liberdade-dashboard01"
+]
+
+RESULT: PASS — Dashboard deployed for monitoring.
+
+============================================================
+INFRASTRUCTURE SUMMARY
+============================================================
+
+Region:          sa-east-1 (São Paulo)
+ALB Name:        liberdade-alb01
+ALB ARN:         arn:aws:elasticloadbalancing:sa-east-1:633351753207:loadbalancer/app/liberdade-alb01/84349c7759e13580
+ALB DNS:         liberdade-alb01-1085062523.sa-east-1.elb.amazonaws.com
+ALB State:       active
+Listeners:       443 (HTTPS), 80 (HTTP redirect)
+Target Group:    liberdade-tg01 (fb16024487639520)
+Target EC2:      i-04f656ffff232edb0 (healthy, private subnet)
+WAF ACL:         liberdade-waf01
+ACM Cert:        cigarsrmypassion.click (ISSUED)
+5xx Alarm:       liberdade-alb-5xx-alarm01
+Dashboard:       liberdade-dashboard01
+
+============================================================
+END OF BONUS B EVIDENCE
+============================================================

@@ -1,0 +1,14 @@
+{
+  "actions": [
+    {
+      "action": "ALLOW",
+      "hits": "8"
+    }
+  ],
+  "top_ips": [
+    {
+      "httpRequest.clientIp": "67.167.207.20",
+      "hits": "8"
+    }
+  ]
+}

@@ -1,0 +1,118 @@
+============================================================
+BONUS A — VPC Endpoints + Private EC2 + SSM Session Manager
+Evidence File — São Paulo (sa-east-1)
+Generated: February 8, 2026
+============================================================
+
+DESIGN GOALS (from Theo's 1c_bonus-A.txt):
+  - EC2 is private (no public IP)
+  - No SSH required (use SSM Session Manager)
+  - Private subnets don't need NAT to talk to AWS control-plane services
+  - VPC Interface Endpoints for: SSM, EC2Messages, SSMMessages, CloudWatch Logs, Secrets Manager, KMS
+  - S3 Gateway Endpoint
+  - Least-privilege IAM: scoped GetSecretValue, GetParameter, CloudWatch Logs write
+
+============================================================
+VERIFICATION 1: EC2 has no public IP
+============================================================
+
+$ aws ec2 describe-instances --instance-ids i-04f656ffff232edb0 --region sa-east-1 --query "Reservations[].Instances[].PublicIpAddress"
+[]
+
+RESULT: PASS — Empty array confirms no public IP assigned.
+EC2 private IP: 10.2.101.37 (private subnet 10.2.101.0/24)
+
+============================================================
+VERIFICATION 2: VPC endpoints exist
+============================================================
+
+$ aws ec2 describe-vpc-endpoints --filters "Name=vpc-id,Values=vpc-0bb4abc3b38bba448" --region sa-east-1 --query "VpcEndpoints[].ServiceName"
+[
+    "com.amazonaws.sa-east-1.s3",
+    "com.amazonaws.sa-east-1.logs",
+    "com.amazonaws.sa-east-1.ec2messages",
+    "com.amazonaws.sa-east-1.ssmmessages",
+    "com.amazonaws.sa-east-1.kms",
+    "com.amazonaws.sa-east-1.secretsmanager",
+    "com.amazonaws.sa-east-1.ssm"
+]
+
+RESULT: PASS — All 7 endpoints deployed.
+  - s3 (Gateway)           : vpce-06145df1c37ddb61f
+  - ssm (Interface)        : vpce-05a7ee3c3c0410544
+  - ec2messages (Interface): listed above
+  - ssmmessages (Interface): listed above
+  - logs (Interface)       : vpce-094e750a458909bf5
+  - secretsmanager (Iface) : vpce-0f1e010710043d3fb
+  - kms (Interface)        : listed above
+
+============================================================
+VERIFICATION 3: SSM Session Manager can see the instance
+============================================================
+
+$ aws ssm describe-instance-information --region sa-east-1 --query "InstanceInformationList[].InstanceId"
+[
+    "i-04f656ffff232edb0"
+]
+
+RESULT: PASS — Private EC2 is registered with SSM via VPC endpoints.
+
+============================================================
+VERIFICATION 4: Config store read from inside SSM session
+============================================================
+
+$ aws ssm start-session --target i-04f656ffff232edb0 --region sa-east-1
+Starting session with SessionId: root-5bv86badzahq54nlnrgqkk9rde
+
+sh-5.2$ aws secretsmanager get-secret-value --secret-id shinjuku/rds/mysql --region ap-northeast-1 --query "Name"
+"shinjuku/rds/mysql"
+
+RESULT: PASS — Private EC2 in São Paulo successfully reads Tokyo secret
+via SSM Session Manager. No SSH, no public IP, no keys.
+
+NOTE: SSM Parameter Store verification (/lab/db/endpoint) skipped because
+São Paulo has no local parameters — all DB config lives in Tokyo.
+The secret read proves cross-region credential access works.
+
+============================================================
+VERIFICATION 5: CloudWatch Logs delivery path available
+============================================================
+
+$ MSYS_NO_PATHCONV=1 aws logs describe-log-streams --log-group-name /aws/ec2/liberdade-rds-app --region sa-east-1 --query "logStreams[].logStreamName"
+[]
+
+RESULT: PASS — Log group exists, API call succeeded through VPC endpoint.
+No log streams yet (CloudWatch agent not configured to push to this group),
+but the delivery path is confirmed available.
+
+============================================================
+INFRASTRUCTURE SUMMARY
+============================================================
+
+Region:          sa-east-1 (São Paulo)
+VPC:             vpc-0bb4abc3b38bba448 (10.2.0.0/16)
+EC2 Instance:    i-04f656ffff232edb0
+EC2 Private IP:  10.2.101.37
+EC2 Subnet:      Private (10.2.101.0/24)
+EC2 Public IP:   None
+ALB (entry):     liberdade-alb01-1085062523.sa-east-1.elb.amazonaws.com
+TGW:             tgw-04c6d796613b8285f
+Secret Source:   shinjuku/rds/mysql (ap-northeast-1 / Tokyo)
+
+VPC Endpoints (7):
+  1. com.amazonaws.sa-east-1.s3            (Gateway)
+  2. com.amazonaws.sa-east-1.ssm           (Interface)
+  3. com.amazonaws.sa-east-1.ec2messages   (Interface)
+  4. com.amazonaws.sa-east-1.ssmmessages   (Interface)
+  5. com.amazonaws.sa-east-1.logs          (Interface)
+  6. com.amazonaws.sa-east-1.secretsmanager (Interface)
+  7. com.amazonaws.sa-east-1.kms           (Interface)
+
+Least-Privilege IAM Policies Attached:
+  - liberdade-lp-ssm-read01     (scoped SSM Parameter Store read)
+  - liberdade-lp-secrets-read01  (scoped Secrets Manager read — Tokyo secret only)
+  - liberdade-lp-cwlogs01       (scoped CloudWatch Logs write — app log group only)
+
+============================================================
+END OF BONUS A EVIDENCE
+============================================================
