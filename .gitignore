@@ -1,0 +1,26 @@
+# Terraform state (contains sensitive resource metadata)
+*.tfstate
+*.tfstate.backup
+.terraform/
+.terraform.lock.hcl
+
+# Variables files (contain passwords, emails, account-specific values)
+terraform.tfvars
+
+# OS / editor artifacts
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+.vscode/
+.idea/
+
+# SSH keys
+*.pem
+*.key
+
+# Gate script output
+gate_result.json
+gate_secrets_and_role.json
+gate_network_db.json

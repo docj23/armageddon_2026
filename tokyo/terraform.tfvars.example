@@ -1,0 +1,27 @@
+# ============================================
+# TOKYO Configuration — Copy to terraform.tfvars and fill in your values
+# ============================================
+
+# Project Settings
+project_name = "shinjuku"
+aws_region   = "ap-northeast-1"
+
+# Network Settings
+vpc_cidr             = "10.1.0.0/16"
+public_subnet_cidrs  = ["10.1.1.0/24", "10.1.2.0/24"]
+private_subnet_cidrs = ["10.1.101.0/24", "10.1.102.0/24"]
+azs                  = ["ap-northeast-1a", "ap-northeast-1c"]
+
+# EC2 Settings
+ec2_ami_id        = "ami-REPLACE_ME"   # Amazon Linux 2023 AMI for ap-northeast-1
+ec2_instance_type = "t3.micro"
+
+# RDS Settings
+db_engine         = "mysql"
+db_instance_class = "db.t3.micro"
+db_name           = "labdb"
+db_username       = "admin"
+db_password       = "REPLACE_ME"       # Use a strong password; never commit real passwords
+
+# Monitoring
+sns_email_endpoint = "your-email@example.com"
